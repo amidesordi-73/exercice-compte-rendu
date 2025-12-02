@@ -99,18 +99,6 @@
             margin-top: 6px;
         }
 
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 16px;
-        }
-
-        @media (min-width: 900px) {
-            .grid {
-                grid-template-columns: 1.2fr 1.8fr;
-            }
-        }
-
         label {
             font-weight: bold;
             display: block;
@@ -181,6 +169,26 @@
             color: #333;
         }
 
+        /* Boutons "gros" d'action */
+        .btn-large {
+            font-size: 16px;
+            padding: 12px 26px;
+            font-weight: bold;
+        }
+
+        .btn-outline {
+            background: #fff;
+            border: 2px solid var(--primary);
+            color: var(--primary);
+        }
+
+        @media (max-width: 600px) {
+            .btn-large {
+                width: 100%;
+                text-align: center;
+            }
+        }
+
         .prompt-box {
             display: none;
             margin-top: 8px;
@@ -192,11 +200,6 @@
             white-space: pre-wrap;
         }
 
-        .small-note {
-            font-size: 12px;
-            color: #555;
-        }
-
         .reflection {
             margin-top: 10px;
         }
@@ -206,6 +209,20 @@
             font-size: 12px;
             color: #777;
             padding: 12px 0 32px;
+        }
+
+        /* Section export en bas */
+        .export-section {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .export-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 12px;
         }
 
         /* Notification export PDF */
@@ -223,6 +240,35 @@
             display: none;
             z-index: 9999;
         }
+
+        /* MODE IMPRESSION : cadres complets, sans scroll, non coupés */
+        @media print {
+            body {
+                background: #fff !important;
+            }
+
+            main {
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 20px !important;
+            }
+
+            .info-box,
+            .card {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                -webkit-column-break-inside: avoid !important;
+            }
+
+            /* Masquer la section boutons export en bas si tu veux */
+            .export-section {
+                display: none !important;
+            }
+
+            #pdfNotif {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -237,10 +283,10 @@
 </header>
 
 <main>
-    <!-- PARTIE 1 AVEC COMPTE RENDU + EXPORT PDF -->
+    <!-- PARTIE 1 AVEC COMPTE RENDU -->
     <section class="info-box">
         <h2>Partie 1. Compte rendu de réunion (support de l’exercice)</h2>
-        <p>Vous pouvez exporter ce document au format PDF avant de réaliser les exercices avec l’IA.</p>
+        <p>Vous pouvez exporter ce compte rendu en PDF juste ici. L’impression de la page complète (avec vos notes) se fait en bas.</p>
 
         <div id="crDocument" style="
             background: #fff;
@@ -315,9 +361,12 @@ Florence remercie chaleureusement toute l’équipe pour la qualité des échang
 Un compte rendu numérique sera envoyé dans la semaine, accompagné des feuilles de route individuelles pour la rentrée.
         </div>
 
-        <button id="btnPdf" class="btn-main" style="margin-top: 12px;">
-            📄 Exporter le compte rendu en PDF
-        </button>
+        <!-- BOUTON PDF EN HAUT, JUSTE SOUS LE COMPTE RENDU -->
+        <div style="margin-top: 14px; text-align: center;">
+            <button id="btnPdf" class="btn-main btn-large" type="button">
+                📄 Exporter le compte rendu en PDF
+            </button>
+        </div>
     </section>
 
     <!-- PARTIE 2 : INTRO EXERCICES GUIDÉS -->
@@ -443,6 +492,19 @@ Garde une diapositive de conclusion avec les remerciements et les étapes suivan
             <li>Comment pourriez-vous réutiliser cette méthode dans votre futur poste (assistante, formateur, responsable pédagogique, etc.)&nbsp;?</li>
         </ul>
     </section>
+
+    <!-- SECTION EXPORT EN BAS : IMPRESSION -->
+    <section class="info-box export-section">
+        <h2>Imprimer la page complète</h2>
+        <p>Quand vous avez terminé vos exercices et vos notes, vous pouvez imprimer cette page (ou l’enregistrer en PDF) :</p>
+
+        <div class="export-buttons">
+            <button class="btn-outline btn-large" type="button" onclick="window.print()">
+                🖨️ Imprimer la page (avec vos notes)
+            </button>
+        </div>
+    </section>
+
 </main>
 
 <footer>
@@ -470,26 +532,73 @@ Garde une diapositive de conclusion avec les remerciements et les étapes suivan
         }, 3000);
     }
 
-    // Chargement d'une image et conversion en dataURL (pour jsPDF)
-    function loadImageAsDataURL(src) {
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = img.naturalWidth;
-                canvas.height = img.naturalHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0);
-                const dataURL = canvas.toDataURL('image/png');
-                resolve(dataURL);
-            };
-            img.onerror = () => resolve(null);
-            img.src = src;
+    // --- Gestion de l'agrandissement automatique pour l'impression ---
+
+    const originalTextAreaHeights = new Map();
+
+    function expandForPrint() {
+        // 1. Agrandir toutes les zones de texte à la hauteur de leur contenu
+        const textareas = document.querySelectorAll('textarea');
+        textareas.forEach((ta) => {
+            // mémoriser la hauteur actuelle pour pouvoir la restaurer ensuite
+            originalTextAreaHeights.set(ta, ta.style.height);
+            ta.style.height = 'auto';
+            ta.style.height = (ta.scrollHeight + 4) + 'px';
+        });
+
+        // 2. Agrandir le cadre du compte rendu (supprimer la limite de hauteur + scroll)
+        const cr = document.getElementById('crDocument');
+        if (cr) {
+            cr.dataset.origMaxHeight = cr.style.maxHeight || '';
+            cr.dataset.origOverflowY = cr.style.overflowY || '';
+            cr.style.maxHeight = 'none';
+            cr.style.overflowY = 'visible';
+            cr.style.height = 'auto';
+        }
+    }
+
+    function resetAfterPrint() {
+        // 1. Restaurer les hauteurs des textareas
+        const textareas = document.querySelectorAll('textarea');
+        textareas.forEach((ta) => {
+            const h = originalTextAreaHeights.get(ta);
+            if (h !== undefined) {
+                ta.style.height = h;
+            } else {
+                ta.style.height = '';
+            }
+        });
+        originalTextAreaHeights.clear();
+
+        // 2. Restaurer le comportement du compte rendu
+        const cr = document.getElementById('crDocument');
+        if (cr) {
+            if (cr.dataset.origMaxHeight !== undefined) {
+                cr.style.maxHeight = cr.dataset.origMaxHeight;
+            }
+            if (cr.dataset.origOverflowY !== undefined) {
+                cr.style.overflowY = cr.dataset.origOverflowY;
+            }
+            cr.style.height = '';
+        }
+    }
+
+    // Écouteurs pour l'impression (compatibilité max navigateurs)
+    if (window.matchMedia) {
+        const mediaQueryList = window.matchMedia('print');
+        mediaQueryList.addListener((mql) => {
+            if (mql.matches) {
+                expandForPrint();
+            } else {
+                resetAfterPrint();
+            }
         });
     }
 
-    // Export PDF (sans impression) avec logos
+    window.addEventListener('beforeprint', expandForPrint);
+    window.addEventListener('afterprint', resetAfterPrint);
+
+    // --- Export PDF (sans impression) avec logos ---
     document.addEventListener('DOMContentLoaded', async function () {
         const btnPdf = document.getElementById('btnPdf');
         if (!btnPdf) return;
@@ -555,6 +664,25 @@ Garde une diapositive de conclusion avec les remerciements et les étapes suivan
             showPdfNotification();
         });
     });
+
+    // Chargement d'une image et conversion en dataURL (pour jsPDF)
+    function loadImageAsDataURL(src) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                const dataURL = canvas.toDataURL('image/png');
+                resolve(dataURL);
+            };
+            img.onerror = () => resolve(null);
+            img.src = src;
+        });
+    }
 </script>
 
 </body>
